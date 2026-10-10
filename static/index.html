@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neo4j知识图谱拖拽答题游戏</title>
+<link rel="icon" href="/static/favicon.ico">
+<link rel="stylesheet" href="/static/css/style.css">
+<script src="/static/js/d3.v7.min.js"></script>
+</head>
+<body>
+<div id="container" class="app">
+    <aside id="control-bar" class="side-nav" aria-label="操作">
+        <div class="side-nav__top">
+          <button id="sidebarToggle" type="button" class="side-nav__toggle" aria-expanded="true" aria-controls="control-bar" title="收起侧栏">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
+              <path d="M18 6L6 18M6 6l12 12"></path>
+            </svg>
+            收起
+          </button>
+        </div>
+        <nav class="side-nav__actions">
+          <button id="resetBtn" type="button" title="重置游戏">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
+              <path d="M23 4v6h-6"></path>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            重置
+          </button>
+          <button id="bgmBtn" type="button" class="muted" title="背景音乐开关">
+            <svg class="icon-volume" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            音乐：关
+          </button>
+        </nav>
+      </aside>
+      
+    
+
+    <main class="workspace">
+        <section class="block block--graph" aria-label="知识图谱">
+            <p class="tip-text tip-text--bar" id="msgBar" aria-live="polite">准备开始</p>
+            <div id="graph-box"></div>
+        </section>
+
+        <section id="candidate-area" class="candidate-dock" aria-label="候选人物">
+            <div class="candidate-scroll" role="region" aria-label="候选人物横向列表">
+                <div id="candidate-list-wrap"></div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<audio id="bgmAudio" src="/static/audio/bgm.wav" loop preload="auto"></audio>
+<audio id="sfxSuccess" src="/static/audio/success.wav" preload="auto"></audio>
+<audio id="sfxFail" src="/static/audio/fail.wav" preload="auto"></audio>
+<audio id="sfxComplete" src="/static/audio/complete.wav" preload="auto"></audio>
+
+<script src="/static/js/game.js"></script>
+</body>
+</html>
