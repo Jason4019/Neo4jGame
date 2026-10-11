@@ -76,72 +76,66 @@ button {
     overflow: hidden;
 }
 
-/* —— 悬浮操作面板 —— */
+/* —— 悬浮操作面板（可拖动） —— */
 .side-nav {
     position: absolute;
     top: 12px;
     left: 12px;
     z-index: 40;
-    width: 132px;
-    padding: 10px 12px;
+    width: 140px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    background: rgba(247, 246, 243, 0.94);
+    background: rgba(247, 246, 243, 0.95);
     border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(28, 28, 28, 0.10);
     overflow: hidden;
-    transition: width 0.2s ease, padding 0.2s ease;
+    user-select: none;
+    touch-action: none;
+    transition: width 0.22s ease, height 0.22s ease, border-radius 0.22s ease;
 }
 
-.side-nav__top {
+/* 拖拽把手条：上部，可按住拖动整个面板 */
+.side-nav__handle {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 7px 10px;
+    cursor: grab;
+    background: rgba(28, 28, 28, 0.04);
+    border-bottom: 1px solid var(--line);
 }
+.side-nav__handle:active { cursor: grabbing; }
+
+.drag-grip {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ink-faint);
+    cursor: grab;
+}
+.drag-grip svg { display: block; }
 
 .side-nav__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 12px;
     font-weight: 500;
     color: var(--ink-muted);
     padding: 2px 0;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    cursor: pointer;
 }
-
-.side-nav__toggle:hover {
-    color: var(--ink);
-}
-
-/* 收起：更小的悬浮条 */
-.app.side-collapsed .side-nav {
-    width: auto;
-    min-width: 44px;
-    padding: 8px 10px;
-    gap: 6px;
-    align-items: stretch;
-}
-
-.app.side-collapsed .side-nav__top {
-    justify-content: center;
-}
-
-.app.side-collapsed .side-nav__actions {
-    border: none;
-    padding: 0;
-    gap: 4px;
-}
-
-.app.side-collapsed .side-nav__actions button {
-    text-align: center;
-    padding: 6px 0;
-    font-size: 12px;
-}
+.side-nav__toggle:hover { color: var(--ink); }
 
 .side-nav__actions {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    border-top: 1px solid var(--line);
-    padding-top: 6px;
+    padding: 6px 10px;
 }
 
 .side-nav__actions button {
@@ -152,14 +146,48 @@ button {
     color: var(--ink-muted);
     transition: color 0.15s ease;
 }
+.side-nav__actions button:hover { color: var(--ink); }
 
-.side-nav__actions button:hover {
-    color: var(--ink);
+#bgmBtn.muted { color: var(--ink-faint); }
+
+/* —— 收起：圆形悬浮气泡（可拖动、可点击展开） —— */
+.app.side-collapsed .side-nav {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border-radius: 50%;
+    border-color: var(--accent);
+    background: #2a2a2a;
+    box-shadow: 0 2px 12px rgba(28, 28, 28, 0.22);
 }
 
-#bgmBtn.muted {
-    color: var(--ink-faint);
+.app.side-collapsed .side-nav__handle {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    justify-content: center;
+    border-bottom: none;
+    background: transparent;
+    cursor: grab;
 }
+.app.side-collapsed .side-nav__handle:active { cursor: grabbing; }
+
+.app.side-collapsed .drag-grip { display: none; }
+
+.app.side-collapsed .side-nav__toggle {
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    padding: 0;
+    gap: 0;
+    color: #f7f6f3;
+    font-size: 0;           /* 隐藏文字，仅显示图标 */
+    cursor: grab;
+}
+.app.side-collapsed .side-nav__toggle svg { width: 18px; height: 18px; }
+.app.side-collapsed .side-nav__toggle:hover { color: #fff; }
+
+.app.side-collapsed .side-nav__actions { display: none; }
 
 .tip-text {
     font-size: 13px;
@@ -214,17 +242,14 @@ button {
 .tip-text--bar {
     position: absolute;
     top: 14px;
-    left: 160px;
-    right: 12px;
+    left: 0;
+    right: 0;
+    text-align: center;
     z-index: 5;
     margin: 0;
     font-size: 12px;
     color: var(--ink-muted);
     pointer-events: none;
-}
-
-.app.side-collapsed .tip-text--bar {
-    left: 72px;
 }
 
 /* D3 文本与连线（单色） */
@@ -334,16 +359,21 @@ button {
         top: 8px;
         left: 8px;
         width: 120px;
-        padding: 8px 10px;
+    }
+
+    .side-nav__handle {
+        padding: 6px 8px;
+    }
+
+    .side-nav__actions {
+        padding: 4px 8px;
     }
 
     .tip-text--bar {
-        left: 140px;
+        left: 0;
+        right: 0;
+        text-align: center;
         top: 10px;
-    }
-
-    .app.side-collapsed .tip-text--bar {
-        left: 64px;
     }
 
     .candidate-dock {

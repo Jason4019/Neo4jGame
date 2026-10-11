@@ -5,6 +5,7 @@ let usedNames = new Set();
 let answeredNodeMap = new Map();
 let bgmEnabled = false;
 let bgmStarted = false;
+let sidePanel = null;
 
 const bgmAudio = document.getElementById("bgmAudio");
 const sfxSuccess = document.getElementById("sfxSuccess");
@@ -112,6 +113,7 @@ window.onload = async function () {
     renderCandidate();
     bindReset();
     bindBgmToggle();
+    initPanelDrag();
     bindSidebarToggle();
     setStatusMessage("准备开始");
 }
@@ -121,16 +123,27 @@ function setStatusMessage(text) {
     if (msgBar) msgBar.textContent = text;
 }
 
+// 侧栏收起/展开切换：更新图标、无障碍属性并记忆状态
 function bindSidebarToggle() {
     const app = document.getElementById("container");
     const btn = document.getElementById("sidebarToggle");
     if (!app || !btn) return;
 
+    const collapsedIcon = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18M3 12h18M3 18h18"></path>
+      </svg>`;
+    const expandedIcon = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18M6 6l12 12"></path>
+      </svg>`;
+
     const apply = (collapsed) => {
         app.classList.toggle("side-collapsed", collapsed);
         btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-        btn.textContent = collapsed ? "展开" : "收起";
         btn.title = collapsed ? "展开侧栏" : "收起侧栏";
+        // 收起态：仅显示展开图标（无文字）；展开态：显示 X 图标 + “收起”
+        btn.innerHTML = collapsed ? collapsedIcon : expandedIcon + "收起";
         try {
             localStorage.setItem("sideNavCollapsed", collapsed ? "1" : "0");
         } catch (_) {}
@@ -143,8 +156,80 @@ function bindSidebarToggle() {
     apply(collapsed);
 
     btn.onclick = function () {
+        // 拖动过程中松手不触发切换
+        if (sidePanel && sidePanel.__dragging) return;
         apply(!app.classList.contains("side-collapsed"));
     };
+}
+
+// 侧栏面板拖动：展开态按住顶部把手拖动；收起态按住圆形气泡拖动（位移判定区分点击展开）
+function initPanelDrag() {
+    const panel = document.getElementById("control-bar");
+    if (!panel) return;
+    sidePanel = panel;
+
+    // 恢复记忆位置
+    try {
+        const x = localStorage.getItem("sideNavX");
+        const y = localStorage.getItem("sideNavY");
+        if (x !== null && y !== null) {
+            panel.style.left = x + "px";
+            panel.style.top = y + "px";
+        }
+    } catch (_) {}
+
+    let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false, moved = false;
+
+    const beginDrag = (e) => {
+        // 展开态下，点按底部操作按钮（重置/音乐）不触发拖动
+        if (e.target.closest && e.target.closest(".side-nav__actions")) return;
+        // 仅响应鼠标左键 / 触摸主触点；右键、辅助键等一律忽略
+        if (e.button !== 0) return;
+        dragging = true;
+        moved = false;
+        sx = e.clientX; sy = e.clientY;
+        ox = panel.offsetLeft; oy = panel.offsetTop;
+        panel.__dragging = false;
+        // 注意：此处不 setPointerCapture，也不 preventDefault。
+        // 一旦按下就捕获指针，会让浏览器合成的 click 事件目标从按钮变成面板，
+        // 导致收起态点击气泡（以及展开态点击“收起”）无法触发 onclick。
+    };
+
+    const moveDrag = (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (!moved && Math.hypot(dx, dy) > 4) {
+            moved = true;
+            panel.__dragging = true;
+            // 确认真正开始拖动后再捕获，保证纯点击的 click 事件不受干扰
+            try { panel.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+        if (moved) {
+            const maxX = window.innerWidth - panel.offsetWidth - 6;
+            const maxY = window.innerHeight - panel.offsetHeight - 6;
+            panel.style.left = Math.max(6, Math.min(maxX, ox + dx)) + "px";
+            panel.style.top = Math.max(6, Math.min(maxY, oy + dy)) + "px";
+        }
+    };
+
+    const endDrag = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        if (moved) {
+            try { panel.releasePointerCapture(e.pointerId); } catch (_) {}
+            try {
+                localStorage.setItem("sideNavX", panel.style.left);
+                localStorage.setItem("sideNavY", panel.style.top);
+            } catch (_) {}
+            // 短暂保持拖拽标志，避免松手立即触发按钮点击
+            setTimeout(() => { panel.__dragging = false; }, 80);
+        }
+    };
+
+    panel.addEventListener("pointerdown", beginDrag);
+    panel.addEventListener("pointermove", moveDrag);
+    panel.addEventListener("pointerup", endDrag);
+    panel.addEventListener("pointercancel", endDrag);
 }
 
 function playSfx(audioEl) {
@@ -169,27 +254,25 @@ function bindBgmToggle() {
     btn.onclick = function () {
         bgmEnabled = !bgmEnabled;
         if (bgmEnabled) {
-            btn.textContent = "音乐：开";
             btn.classList.remove("muted");
             bgmAudio.play().then(() => { bgmStarted = true; }).catch(() => {});
-            bgmBtn.innerHTML = `
+            btn.innerHTML = `
+      <svg class="icon-volume" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+      音乐：开
+    `
+        } else {
+            btn.classList.add("muted");
+            bgmAudio.pause();
+            btn.innerHTML = `
       <svg class="icon-volume" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
         <line x1="23" y1="9" x2="17" y2="15"></line>
         <line x1="17" y1="9" x2="23" y2="15"></line>
       </svg>
       音乐：关
-    `
-        } else {
-            btn.textContent = "音乐：关";
-            btn.classList.add("muted");
-            bgmAudio.pause();
-            bgmBtn.innerHTML = `
-      <svg class="icon-volume" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-      </svg>
-      音乐：开
     `
         }
     };
