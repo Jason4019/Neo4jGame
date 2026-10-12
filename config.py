@@ -16,5 +16,9 @@ REL_MAP = {
     "FRIEND": "伙伴",
     "ENEMY": "敌对",
     "MASTER": "主人",
-    "DISCIPLE": "弟子"
+    "DISCIPLE": "弟子",
+    "HUSBAND": "丈夫",
+    "SISTER": "姐妹",
+    "LOVER": "恋人",
+    "PARTNER": "对食"
 }
