@@ -328,22 +328,26 @@ button {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
-    font-weight: 500;
+    gap: 10px;
+    padding: 9px 16px;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--ink);
-    background: transparent;
-    border: 1px solid var(--line);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
     cursor: grab;
     user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-x;   /* 触屏允许横向滚动列表；拖拽由长按触发后由 JS 关闭 */
     white-space: nowrap;
-    transition: border-color 0.15s ease, color 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
 }
 
 .candidate-avatar {
-    width: 22px;
-    height: 22px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
     flex: 0 0 auto;
@@ -360,6 +364,38 @@ button {
 
 .candidate-item.used {
     display: none;
+}
+
+.candidate-item.dragging-source {
+    opacity: 0.55;
+}
+
+.candidate-item.is-dragging {
+    opacity: 0.4;
+    transform: scale(0.96);
+}
+
+.drag-ghost {
+    position: fixed;
+    z-index: 9999;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    background: #fff;
+    border: 1.5px solid var(--accent);
+    border-radius: 12px;
+    pointer-events: none;
+    transform: translate(-50%, -50%);   /* 幽灵中心对准指针中心 */
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.drag-ghost .candidate-avatar {
+    width: 36px;
+    height: 36px;
 }
 
 /* —— 窄屏：保持悬浮，略紧凑 —— */

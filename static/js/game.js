@@ -17,6 +17,29 @@ if (sfxSuccess) sfxSuccess.volume = 0.7;
 if (sfxFail) sfxFail.volume = 0.7;
 if (sfxComplete) sfxComplete.volume = 0.8;
 
+// 移动端自动播放解锁：浏览器要求音频必须由用户手势直接触发。
+// 在首次手势（触摸/点击/按键）时对全部音频 play+pause 一次，解除限制，
+// 之后答题回调里的异步 playSfx 才能真正出声。
+let audioUnlocked = false;
+function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    [bgmAudio, sfxSuccess, sfxFail, sfxComplete].forEach(a => {
+        if (!a) return;
+        const p = a.play();
+        if (p && p.then) {
+            p.then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+        }
+    });
+}
+function onFirstGesture() {
+    unlockAudio();
+    ["pointerdown", "touchstart", "click", "keydown"].forEach(ev =>
+        document.removeEventListener(ev, onFirstGesture, { capture: true }));
+}
+["pointerdown", "touchstart", "click", "keydown"].forEach(ev =>
+    document.addEventListener(ev, onFirstGesture, { capture: true }));
+
 const graphBox = document.getElementById("graph-box");
 const svg = d3.select("#graph-box")
     .append("svg")
@@ -40,6 +63,9 @@ const zoom = d3.zoom()
 svg.call(zoom);
 
 const NODE_RADIUS = 30;
+
+// 头像兜底：角色头像缺失时显示的默认占位图
+const DEFAULT_AVATAR = "/static/images/avatars/_default.jpg";
 
 // 头像裁剪路径：答对时节点圆形背景替换为对应角色头像
 svg.append("defs").append("clipPath")
@@ -409,56 +435,7 @@ function renderGraph() {
             return "";
         });
 
-    // 拖拽答题逻辑（来自底部候选人物）
-    node.on("dragover", e => e.preventDefault())
-        .on("drop", async function (e, d) {
-            e.preventDefault();
-            const dragName = e.dataTransfer.getData("text/plain");
-            if (!dragName || usedNames.has(dragName)) return;
-
-            const resp = await fetch("/api/check-match", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    node_id: d.id,
-                    user_answer_name: dragName
-                })
-            });
-            const ret = await resp.json();
-            const data = ret.data;
-
-            if (data.is_correct) {
-                answeredNodeMap.set(d.id, data.std_answer);
-                usedNames.add(dragName);
-                setStatusMessage(`✅正确！${data.std_answer}：${data.person_desc}`);
-                // 局部更新当前节点文字，不重绘整张图
-                const nodeG = d3.select(this);
-                nodeG.select("text").text(data.std_answer);
-                // 节点圆形背景替换为对应角色头像
-                nodeG.select("circle").remove();
-                nodeG.append("image")
-                    .attr("class", "node-avatar")
-                    .attr("x", -NODE_RADIUS)
-                    .attr("y", -NODE_RADIUS)
-                    .attr("width", NODE_RADIUS * 2)
-                    .attr("height", NODE_RADIUS * 2)
-                    .attr("preserveAspectRatio", "xMidYMid slice")
-                    .attr("href", `/static/images/avatars/${encodeURIComponent(data.std_answer)}.jpg`)
-                    .attr("clip-path", "url(#nodeClip)");
-                // 答对后更新候选词列表
-                renderCandidate();
-                if (isGameComplete()) {
-                    playSfx(sfxComplete);
-                    setStatusMessage(`🎉全部答对！恭喜通关！`);
-                } else {
-                    playSfx(sfxSuccess);
-                }
-            } else {
-                playSfx(sfxFail);
-                setStatusMessage(`❌名字不匹配`);
-                // 错误时：不做任何图谱重绘，节点保持不动
-            }
-        });
+    // 答题逻辑：候选人物拖拽到本节点后，由候选的 pointer 事件命中调用 answerNode(nodeEl, name)
 
     // 重新布局时先解除固定，便于力导向重新排布
     nodes.forEach(d => {
@@ -538,14 +515,162 @@ function renderCandidate() {
         img.src = avatar;
         img.alt = "";
         img.draggable = false;
+        // 头像缺失时兜底为默认占位图
+        img.onerror = () => { if (img.getAttribute("src") !== DEFAULT_AVATAR) img.src = DEFAULT_AVATAR; };
         div.appendChild(img);
         div.appendChild(document.createTextNode(name));
-        div.draggable = true;
-        div.addEventListener("dragstart", (e) => {
-            e.dataTransfer.setData("text/plain", name);
-        })
+        // 指针拖拽：桌面鼠标与手机触摸均可按下即拖，无需长按
+        div.addEventListener("pointerdown", (e) => beginCandidateDrag(e, div, name));
         wrap.appendChild(div);
     })
+}
+
+// ---- 候选人物指针拖拽 ----
+let candidateDrag = null;
+
+const CANDIDATE_LONG_PRESS_MS = 350; // 触屏长按阈值，达到才算拖拽
+
+function beginCandidateDrag(e, item, name) {
+    if (usedNames.has(name)) return;
+    e.preventDefault();
+    const isTouch = e.pointerType === "touch" || e.pointerType === "pen";
+    const s = {
+        name, item, isTouch,
+        startX: e.clientX, startY: e.clientY,
+        moved: false, ghost: null, touchTimer: null
+    };
+    candidateDrag = s;
+    item.classList.add("dragging-source");
+    if (isTouch) {
+        // 触屏：长按才进入拖拽；长按前移动视为列表滚动
+        s.touchTimer = setTimeout(() => {
+            if (!candidateDrag || candidateDrag !== s) return;
+            s.moved = true;
+            item.style.touchAction = "none";  // 进入拖拽后禁止滚动，避免列表被带着滑
+            createDragGhost(s, e.clientX, e.clientY);
+            item.classList.add("is-dragging");
+        }, CANDIDATE_LONG_PRESS_MS);
+    }
+    window.addEventListener("pointermove", onCandidateDragMove);
+    window.addEventListener("pointerup", onCandidateDragEnd);
+    window.addEventListener("pointercancel", onCandidateDragEnd);
+}
+
+function onCandidateDragMove(e) {
+    if (!candidateDrag) return;
+    const s = candidateDrag;
+    const dx = e.clientX - s.startX;
+    const dy = e.clientY - s.startY;
+    if (!s.moved) {
+        if (s.isTouch) {
+            // 长按未触发前位移过大 → 判定为滚动列表，取消拖拽
+            if (Math.hypot(dx, dy) > 14) {
+                cancelCandidateDrag();
+            }
+            return;
+        }
+        // 鼠标：位移超过阈值即拖
+        if (Math.hypot(dx, dy) < 6) return;
+        s.moved = true;
+        createDragGhost(s, e.clientX, e.clientY);
+        s.item.classList.add("is-dragging");
+    }
+    // 幽灵中心对准指针中心（CSS 已 translate(-50%,-50%)）
+    s.ghost.style.left = e.clientX + "px";
+    s.ghost.style.top = e.clientY + "px";
+}
+
+function createDragGhost(s, x, y) {
+    const ghost = s.item.cloneNode(true);
+    ghost.classList.remove("dragging-source");
+    ghost.classList.add("drag-ghost");
+    document.body.appendChild(ghost);
+    s.ghost = ghost;
+    ghost.style.left = x + "px";
+    ghost.style.top = y + "px";
+}
+
+function cancelCandidateDrag() {
+    if (!candidateDrag) return;
+    const s = candidateDrag;
+    candidateDrag = null;
+    if (s.touchTimer) clearTimeout(s.touchTimer);
+    window.removeEventListener("pointermove", onCandidateDragMove);
+    window.removeEventListener("pointerup", onCandidateDragEnd);
+    window.removeEventListener("pointercancel", onCandidateDragEnd);
+    if (s.ghost) s.ghost.remove();
+    s.item.classList.remove("dragging-source", "is-dragging");
+    s.item.style.touchAction = "";
+}
+
+function onCandidateDragEnd(e) {
+    if (!candidateDrag) return;
+    const s = candidateDrag;
+    candidateDrag = null;
+    if (s.touchTimer) clearTimeout(s.touchTimer);
+    window.removeEventListener("pointermove", onCandidateDragMove);
+    window.removeEventListener("pointerup", onCandidateDragEnd);
+    window.removeEventListener("pointercancel", onCandidateDragEnd);
+    if (s.ghost) s.ghost.remove();
+    s.item.classList.remove("dragging-source", "is-dragging");
+    s.item.style.touchAction = "";
+    if (!s.moved) return; // 未进入拖拽，视为点击/滚动，不触发答题
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const nodeEl = el && el.closest ? el.closest(".node") : null;
+    if (nodeEl) answerNode(nodeEl, s.name);
+}
+
+async function answerNode(nodeEl, dragName) {
+    if (!dragName || usedNames.has(dragName)) return;
+    const d = d3.select(nodeEl).datum();
+    if (!d) return;
+    const resp = await fetch("/api/check-match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            node_id: d.id,
+            user_answer_name: dragName
+        })
+    });
+    const ret = await resp.json();
+    const data = ret.data;
+
+    if (data.is_correct) {
+        answeredNodeMap.set(d.id, data.std_answer);
+        usedNames.add(dragName);
+        setStatusMessage(`✅正确！${data.std_answer}：${data.person_desc}`);
+        // 局部更新当前节点文字，不重绘整张图
+        const nodeG = d3.select(nodeEl);
+        nodeG.select("text").text(data.std_answer);
+        // 节点圆形背景替换为对应角色头像
+        nodeG.select("circle").remove();
+        nodeG.append("image")
+            .attr("class", "node-avatar")
+            .attr("x", -NODE_RADIUS)
+            .attr("y", -NODE_RADIUS)
+            .attr("width", NODE_RADIUS * 2)
+            .attr("height", NODE_RADIUS * 2)
+            .attr("preserveAspectRatio", "xMidYMid slice")
+            .attr("href", `/static/images/avatars/${encodeURIComponent(data.std_answer)}.jpg`)
+            .attr("clip-path", "url(#nodeClip)")
+            // 头像缺失时兜底为默认占位图
+            .on("error", function () {
+                const img = d3.select(this);
+                if (img.attr("href") !== DEFAULT_AVATAR) img.attr("href", DEFAULT_AVATAR);
+            });
+        // 答对后更新候选词列表
+        renderCandidate();
+        if (isGameComplete()) {
+            playSfx(sfxComplete);
+            setStatusMessage(`🎉全部答对！恭喜通关！`);
+        } else {
+            playSfx(sfxSuccess);
+        }
+    } else {
+        playSfx(sfxFail);
+        setStatusMessage(`❌名字不匹配`);
+        // 错误时：不做任何图谱重绘，节点保持不动
+    }
 }
 
 function bindReset() {
