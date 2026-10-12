@@ -53,8 +53,14 @@ def get_person_name_by_id(node_id):
         }
 
 def get_all_person_names():
-    """获取全部人名，底部候选列表"""
+    """获取全部人名和头像URL，底部候选列表"""
     with driver.session() as session:
         res = session.run("MATCH (p:Person) RETURN p.name AS name")
-        names = [rec["name"] for rec in res]
-        return names
+        candidates = []
+        for rec in res:
+            name = rec["name"]
+            candidates.append({
+                "name": name,
+                "avatar": f"/static/images/avatars/{name}.jpg"
+            })
+        return candidates

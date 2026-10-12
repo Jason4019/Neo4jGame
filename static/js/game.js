@@ -40,6 +40,14 @@ const zoom = d3.zoom()
 svg.call(zoom);
 
 const NODE_RADIUS = 30;
+
+// 头像裁剪路径：答对时节点圆形背景替换为对应角色头像
+svg.append("defs").append("clipPath")
+    .attr("id", "nodeClip")
+    .append("circle")
+    .attr("cx", 0)
+    .attr("cy", 0)
+    .attr("r", NODE_RADIUS);
 const COLLIDE_RADIUS = 48;
 
 const simulation = d3.forceSimulation()
@@ -424,7 +432,19 @@ function renderGraph() {
                 usedNames.add(dragName);
                 setStatusMessage(`✅正确！${data.std_answer}：${data.person_desc}`);
                 // 局部更新当前节点文字，不重绘整张图
-                d3.select(this).select("text").text(data.std_answer);
+                const nodeG = d3.select(this);
+                nodeG.select("text").text(data.std_answer);
+                // 节点圆形背景替换为对应角色头像
+                nodeG.select("circle").remove();
+                nodeG.append("image")
+                    .attr("class", "node-avatar")
+                    .attr("x", -NODE_RADIUS)
+                    .attr("y", -NODE_RADIUS)
+                    .attr("width", NODE_RADIUS * 2)
+                    .attr("height", NODE_RADIUS * 2)
+                    .attr("preserveAspectRatio", "xMidYMid slice")
+                    .attr("href", `/static/images/avatars/${encodeURIComponent(data.std_answer)}.jpg`)
+                    .attr("clip-path", "url(#nodeClip)");
                 // 答对后更新候选词列表
                 renderCandidate();
                 if (isGameComplete()) {
@@ -507,11 +527,19 @@ function nodeDragEnded(event, d) {
 function renderCandidate() {
     const wrap = document.getElementById("candidate-list-wrap");
     wrap.innerHTML = "";
-    candidates.forEach(name => {
+    candidates.forEach(c => {
+        const name = typeof c === "string" ? c : c.name;
+        const avatar = (typeof c === "object" && c.avatar) ? c.avatar : `/static/images/avatars/${encodeURIComponent(name)}.jpg`;
         const div = document.createElement("div");
         div.className = "candidate-item";
         if (usedNames.has(name)) div.classList.add("used");
-        div.textContent = name;
+        const img = document.createElement("img");
+        img.className = "candidate-avatar";
+        img.src = avatar;
+        img.alt = "";
+        img.draggable = false;
+        div.appendChild(img);
+        div.appendChild(document.createTextNode(name));
         div.draggable = true;
         div.addEventListener("dragstart", (e) => {
             e.dataTransfer.setData("text/plain", name);

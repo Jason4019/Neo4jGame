@@ -328,6 +328,7 @@ button {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
+    gap: 8px;
     padding: 6px 12px;
     font-size: 13px;
     font-weight: 500;
@@ -338,6 +339,14 @@ button {
     user-select: none;
     white-space: nowrap;
     transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.candidate-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
 }
 
 .candidate-item:hover {
